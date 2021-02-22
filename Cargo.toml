@@ -8,3 +8,4 @@ edition = "2018"
 
 [dependencies]
 apres = "0.2.5"
+mlua = { version = "0.5.1", features = ["lua54", "vendored"] }
