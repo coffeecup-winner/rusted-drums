@@ -1,10 +1,13 @@
 use std::collections::BTreeMap;
 use std::io::Result;
 
-use apres::{MIDIEvent, MIDI};
+use midly::{
+    num::{u15, u28, u4, u7},
+    Format, Header, MetaMessage, MidiMessage, Smf, Timing, Track, TrackEvent, TrackEventKind,
+};
 use mlua::{prelude::LuaResult, Lua};
 
-const TICKS_PER_QUARTER_NOTE: usize = 120;
+const TICKS_PER_QUARTER_NOTE: u32 = 120;
 const NOTE_C3: u8 = 36;
 const NOTE_D3: u8 = 38;
 const VELOCITY_DEFAULT: u8 = 100;
@@ -17,66 +20,11 @@ struct LuaEvent<'lua> {
     velocity: mlua::Integer,
 }
 
-fn print_midi(midi: MIDI) {
-    println!("Events count: {}", midi.count_events());
-    for i in 1..=midi.count_events() {
-        match midi.get_event(i as u64) {
-            Some(event) => match event {
-                MIDIEvent::NoteOn(a, b, c) => println!("NoteOn: {}, {}, {}", a, b, c),
-                MIDIEvent::NoteOff(a, b, c) => println!("NoteOff: {}, {}, {}", a, b, c),
-                _ => println!("UNKNOWN"),
-            },
-            None => println!("NONE"),
-        }
-    }
+fn print_midi(midi: &Smf) {
+    println!("MIDI file debug print: {:#?}", midi);
 }
 
-fn generate_midi() -> MIDI {
-    let mut midi = MIDI::new();
-    midi.insert_event(
-        0,
-        TICKS_PER_QUARTER_NOTE * 0,
-        MIDIEvent::NoteOn(0, NOTE_C3, VELOCITY_DEFAULT),
-    );
-    midi.insert_event(
-        0,
-        TICKS_PER_QUARTER_NOTE * 1 / 2,
-        MIDIEvent::NoteOff(0, NOTE_C3, VELOCITY_OFF),
-    );
-    midi.insert_event(
-        0,
-        TICKS_PER_QUARTER_NOTE * 1,
-        MIDIEvent::NoteOn(0, NOTE_D3, VELOCITY_DEFAULT),
-    );
-    midi.insert_event(
-        0,
-        TICKS_PER_QUARTER_NOTE * 3 / 2,
-        MIDIEvent::NoteOff(0, NOTE_D3, VELOCITY_OFF),
-    );
-    midi.insert_event(
-        0,
-        TICKS_PER_QUARTER_NOTE * 2,
-        MIDIEvent::NoteOn(0, NOTE_C3, VELOCITY_DEFAULT),
-    );
-    midi.insert_event(
-        0,
-        TICKS_PER_QUARTER_NOTE * 5 / 2,
-        MIDIEvent::NoteOff(0, NOTE_C3, VELOCITY_OFF),
-    );
-    midi.insert_event(
-        0,
-        TICKS_PER_QUARTER_NOTE * 3,
-        MIDIEvent::NoteOn(0, NOTE_D3, VELOCITY_DEFAULT),
-    );
-    midi.insert_event(
-        0,
-        TICKS_PER_QUARTER_NOTE * 7 / 2,
-        MIDIEvent::NoteOff(0, NOTE_D3, VELOCITY_OFF),
-    );
-    midi
-}
-
-fn generate_midi_lua(text: &[u8]) -> LuaResult<MIDI> {
+fn generate_midi<'a, 'b>(text: &'a [u8]) -> LuaResult<Smf<'b>> {
     let lua = Lua::new();
 
     lua.globals().set("C3", NOTE_C3)?;
@@ -99,16 +47,44 @@ fn generate_midi_lua(text: &[u8]) -> LuaResult<MIDI> {
         map.insert(k, event);
     }
 
-    let mut midi = MIDI::new();
+    let header = Header::new(
+        Format::SingleTrack,
+        Timing::Metrical(u15::from_int_lossy(TICKS_PER_QUARTER_NOTE as u16)),
+    );
+    let mut midi = Smf::new(header);
 
+    let mut track = Track::new();
+
+    let mut time = 0u32;
     for (k, v) in map {
-        let event = match v.type_.as_ref() {
-            b"NOTE_ON" => MIDIEvent::NoteOn(0, v.note as u8, v.velocity as u8),
-            b"NOTE_OFF" => MIDIEvent::NoteOff(0, v.note as u8, v.velocity as u8),
+        let new_time = TICKS_PER_QUARTER_NOTE * k as u32 / 2;
+        let delta = new_time - time;
+        time = new_time;
+        let message = match v.type_.as_ref() {
+            b"NOTE_ON" => MidiMessage::NoteOn {
+                key: u7::from_int_lossy(v.note as u8),
+                vel: u7::from_int_lossy(v.velocity as u8),
+            },
+            b"NOTE_OFF" => MidiMessage::NoteOff {
+                key: u7::from_int_lossy(v.note as u8),
+                vel: u7::from_int_lossy(v.velocity as u8),
+            },
             _ => panic!("Unknown event: {}", v.type_.to_str()?),
         };
-        midi.insert_event(0, TICKS_PER_QUARTER_NOTE * k as usize / 2, event);
+        track.push(TrackEvent {
+            delta: u28::from_int_lossy(delta),
+            kind: TrackEventKind::Midi {
+                channel: u4::from_int_lossy(0),
+                message,
+            },
+        });
     }
+
+    track.push(TrackEvent {
+        delta: u28::from_int_lossy(0),
+        kind: TrackEventKind::Meta(MetaMessage::EndOfTrack),
+    });
+    midi.tracks.push(track);
 
     Ok(midi)
 }
@@ -117,15 +93,13 @@ fn main() -> Result<()> {
     let command = &std::env::args().nth(1).unwrap();
     let file = &std::env::args().nth(2).unwrap();
     match command as &str {
-        "print" => print_midi(MIDI::from_path(file)),
-        "generate" => {
-            let midi = generate_midi();
-            midi.save(file);
+        "print" => {
+            print_midi(&Smf::parse(&std::fs::read(file)?).expect("Failed to parse a MIDI file"))
         }
-        "lua" => {
+        "generate" => {
             let outfile = &std::env::args().nth(3).unwrap();
-            let midi = generate_midi_lua(&std::fs::read(file)?).expect("Lua script failed");
-            midi.save(outfile);
+            let midi = generate_midi(&std::fs::read(file)?).expect("Lua script failed");
+            midi.save(outfile)?;
         }
         _ => println!("Unknown command `{}`", command),
     }
