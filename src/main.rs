@@ -7,11 +7,9 @@ use midly::{
 };
 use mlua::{prelude::LuaResult, Lua};
 
+mod runtime;
+
 const TICKS_PER_QUARTER_NOTE: u32 = 120;
-const NOTE_C3: u8 = 36;
-const NOTE_D3: u8 = 38;
-const VELOCITY_DEFAULT: u8 = 100;
-const VELOCITY_OFF: u8 = 64;
 
 #[derive(Debug)]
 struct LuaEvent<'lua> {
@@ -27,12 +25,8 @@ fn print_midi(midi: &Smf) {
 fn generate_midi<'a, 'b>(text: &'a [u8]) -> LuaResult<Smf<'b>> {
     let lua = Lua::new();
 
-    lua.globals().set("C3", NOTE_C3)?;
-    lua.globals().set("D3", NOTE_D3)?;
-    lua.globals().set("VELOCITY_DEFAULT", VELOCITY_DEFAULT)?;
-    lua.globals().set("VELOCITY_OFF", VELOCITY_OFF)?;
+    runtime::load_into(&lua)?;
 
-    lua.load(include_str!("lua_lib/lib.lua")).exec()?;
     lua.load(text).exec()?;
 
     let events: mlua::prelude::LuaTable = lua.globals().get("__events")?;
