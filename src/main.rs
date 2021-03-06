@@ -32,6 +32,7 @@ fn generate_midi<'a, 'b>(text: &'a [u8]) -> LuaResult<Smf<'b>> {
     lua.globals().set("VELOCITY_DEFAULT", VELOCITY_DEFAULT)?;
     lua.globals().set("VELOCITY_OFF", VELOCITY_OFF)?;
 
+    lua.load(include_str!("lua_lib/lib.lua")).exec()?;
     lua.load(text).exec()?;
 
     let events: mlua::prelude::LuaTable = lua.globals().get("__events")?;
