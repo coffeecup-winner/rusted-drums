@@ -8,4 +8,4 @@ edition = "2018"
 
 [dependencies]
 midly = { version = "0.5.1", default-features = false, features = ["std", "alloc"] }
-mlua = { version = "0.5.1", features = ["lua54", "vendored"] }
+mlua = { version = "0.5.3", features = ["lua54", "vendored"] }
