@@ -21,14 +21,16 @@ function note_off(tick, note, velocity)
     __next_event_id = __next_event_id + 1
 end
 
+function play(tick, note, velocity)
+    note_on(tick, note, velocity)
+    note_off(tick + 1, note, VELOCITY_OFF)
+end
+
 function pattern(note, pattern_string)
-    local is_on
     for i = 1, #pattern_string do
         local c = pattern_string:sub(i, i)
         if c == '*' then
-            note_on(i - 1, note, VELOCITY_DEFAULT)
-            note_off(i, note, VELOCITY_OFF)
-            is_on = true
+            play(i - 1, note, VELOCITY_DEFAULT)
         elseif c == '-' then
             -- do nothing
         else
