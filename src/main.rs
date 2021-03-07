@@ -93,8 +93,16 @@ fn main() -> Result<()> {
         }
         "generate" => {
             let outfile = &std::env::args().nth(3).unwrap();
-            let midi = generate_midi(&std::fs::read(file)?).expect("Lua script failed");
-            midi.save(outfile)?;
+            match generate_midi(&std::fs::read(file)?) {
+                Ok(midi) => midi.save(outfile)?,
+                Err(err) => match err {
+                    mlua::Error::SyntaxError { message, .. } => {
+                        eprintln!("Syntax error: {}", message)
+                    }
+                    mlua::Error::RuntimeError(m) => eprintln!("Runtime error: {}", m),
+                    _ => eprintln!("Unknown error: {}", err),
+                },
+            }
         }
         _ => println!("Unknown command `{}`", command),
     }
