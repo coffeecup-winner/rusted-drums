@@ -1,7 +1,7 @@
 use std::io::Result;
 
 use midly::Smf;
-use mlua::{prelude::LuaResult, Lua};
+use mlua::prelude::LuaResult;
 
 mod runtime;
 mod smf;
@@ -11,10 +11,9 @@ fn print_midi(midi: &Smf) {
 }
 
 fn generate_midi<'a, 'b>(text: &'a [u8]) -> LuaResult<Smf<'b>> {
-    let lua = Lua::new();
-    runtime::load_into(&lua)?;
-    lua.load(text).exec()?;
-    let events = runtime::get_events(&lua)?;
+    let runtime = runtime::Runtime::new()?;
+    runtime.exec(text)?;
+    let events = runtime.get_events()?;
     let midi = smf::create_from_events(&events);
     Ok(midi)
 }
