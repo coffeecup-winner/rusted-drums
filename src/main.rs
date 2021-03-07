@@ -1,4 +1,3 @@
-use std::collections::BTreeMap;
 use std::io::Result;
 
 use midly::{
@@ -11,13 +10,6 @@ mod runtime;
 
 const TICKS_PER_QUARTER_NOTE: u32 = 120;
 
-#[derive(Debug)]
-struct LuaEvent<'lua> {
-    type_: mlua::String<'lua>,
-    note: mlua::Integer,
-    velocity: mlua::Integer,
-}
-
 fn print_midi(midi: &Smf) {
     println!("MIDI file debug print: {:#?}", midi);
 }
@@ -29,18 +21,7 @@ fn generate_midi<'a, 'b>(text: &'a [u8]) -> LuaResult<Smf<'b>> {
 
     lua.load(text).exec()?;
 
-    let events: mlua::prelude::LuaTable = lua.globals().get("__events")?;
-    let mut map = BTreeMap::new();
-
-    for pair in events.pairs::<mlua::Integer, mlua::Table>() {
-        let (k, v) = pair.unwrap();
-        let event = LuaEvent {
-            type_: v.get("event")?,
-            note: v.get("note")?,
-            velocity: v.get("velocity")?,
-        };
-        map.insert(k, event);
-    }
+    let events = runtime::get_events(&lua)?;
 
     let header = Header::new(
         Format::SingleTrack,
@@ -51,20 +32,20 @@ fn generate_midi<'a, 'b>(text: &'a [u8]) -> LuaResult<Smf<'b>> {
     let mut track = Track::new();
 
     let mut time = 0u32;
-    for (k, v) in map {
-        let new_time = TICKS_PER_QUARTER_NOTE * k as u32 / 2;
+    for e in events {
+        let new_time = TICKS_PER_QUARTER_NOTE * e.tick as u32 / 2;
         let delta = new_time - time;
         time = new_time;
-        let message = match v.type_.as_ref() {
-            b"NOTE_ON" => MidiMessage::NoteOn {
-                key: u7::from_int_lossy(v.note as u8),
-                vel: u7::from_int_lossy(v.velocity as u8),
+        let message = match e.type_ {
+            runtime::NOTE_ON => MidiMessage::NoteOn {
+                key: u7::from_int_lossy(e.note as u8),
+                vel: u7::from_int_lossy(e.velocity as u8),
             },
-            b"NOTE_OFF" => MidiMessage::NoteOff {
-                key: u7::from_int_lossy(v.note as u8),
-                vel: u7::from_int_lossy(v.velocity as u8),
+            runtime::NOTE_OFF => MidiMessage::NoteOff {
+                key: u7::from_int_lossy(e.note as u8),
+                vel: u7::from_int_lossy(e.velocity as u8),
             },
-            _ => panic!("Unknown event: {}", v.type_.to_str()?),
+            _ => panic!("Unknown event: {}", e.type_),
         };
         track.push(TrackEvent {
             delta: u28::from_int_lossy(delta),
