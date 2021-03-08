@@ -1,4 +1,4 @@
-use_keymap('AddictiveDrums2')
+use_keymap 'AddictiveDrums2'
 
 pattern:hh      [[********]]; x2()
 pattern:snare   [[--*---*-]]; x2()
