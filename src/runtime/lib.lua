@@ -26,7 +26,7 @@ function play(tick, note, velocity)
     note_off(tick + 1, note, VELOCITY_OFF)
 end
 
-function pattern(note, pattern_string)
+function __pattern(note, pattern_string)
     for i = 1, #pattern_string do
         local c = pattern_string:sub(i, i)
         if c == '*' then
@@ -35,6 +35,16 @@ function pattern(note, pattern_string)
             -- do nothing
         else
             error('Unknown pattern char \'' .. c .. '\'')
+        end
+    end
+end
+
+pattern = {}
+function use_keymap(keymap_name)
+    local keymap = __keymaps[keymap_name]
+    for k, v in pairs(keymap) do
+        pattern[k] = function(self, pattern_string)
+            __pattern(v, pattern_string)
         end
     end
 end

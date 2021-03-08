@@ -57,6 +57,7 @@ impl Runtime {
         self.lua.globals().set("NOTE_ON", NOTE_ON)?;
         self.lua.globals().set("NOTE_OFF", NOTE_OFF)?;
 
+        self.lua.load(include_str!("keymaps.lua")).exec()?;
         self.lua.load(include_str!("lib.lua")).exec()?;
 
         Ok(())

@@ -1,6 +1,8 @@
-pattern(D4, string.rep([[********]], 2))
-pattern(D3, string.rep([[--*---*-]], 2))
-pattern(C3, string.rep([[*---*---]], 2))
+use_keymap('AddictiveDrums2')
+
+pattern:hh(string.rep([[********]], 2))
+pattern:snare(string.rep([[--*---*-]], 2))
+pattern:kick(string.rep([[*---*---]], 2))
 
 for i = 0, 15 do
     if i % 3 == 0 or i % 7 == 0 then
